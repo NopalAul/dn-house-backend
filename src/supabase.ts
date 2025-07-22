@@ -9,4 +9,5 @@ export interface Photo {
   caption: string
   filename?: string
   created_at: string
+  type: string // "postcard" or "polaroid"
 }

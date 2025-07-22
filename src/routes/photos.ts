@@ -49,6 +49,7 @@ photos.post('/upload', async (c) => {
     const formData = await c.req.formData()
     const file = formData.get('file') as File
     const caption = formData.get('caption') as string || ''
+    const type = formData.get('type') as string || ''
 
     if (!file) {
       return c.json({ error: 'No file provided' }, 400)
@@ -57,6 +58,11 @@ photos.post('/upload', async (c) => {
     // Validate file type
     if (!file.type.startsWith('image/')) {
       return c.json({ error: 'File must be an image' }, 400)
+    }
+
+    // Validate type value
+    if (!['postcard', 'polaroid'].includes(type)) {
+      return c.json({ error: 'Invalid type. Must be "postcard" or "polaroid".' }, 400)
     }
 
     // Generate unique filename
@@ -75,7 +81,8 @@ photos.post('/upload', async (c) => {
       .insert([
         {
           url: presignedUrl,
-          caption: caption
+          caption: caption,
+          type: type // store type
         }
       ])
       .select()
