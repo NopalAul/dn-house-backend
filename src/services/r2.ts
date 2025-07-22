@@ -1,5 +1,5 @@
 import AWS from 'aws-sdk'
-import { env } from './env'
+import { env } from '../env'
 
 export const r2 = new AWS.S3({
   endpoint: env.R2_ENDPOINT,

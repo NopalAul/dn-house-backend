@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
-import { supabase, Photo } from '../supabase'
-import { uploadToR2, getPresignedUrl } from '../r2'
+import { supabase, Photo } from '../services/supabase'
+import { uploadToR2, getPresignedUrl } from '../services/r2'
 
 const photos = new Hono()
 
