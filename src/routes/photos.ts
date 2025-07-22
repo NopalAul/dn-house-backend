@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { supabase, Photo } from '../supabase'
-import { uploadToR2 } from '../r2'
+import { uploadToR2, getPresignedUrl } from '../r2'
 
 const photos = new Hono()
 
@@ -64,14 +64,17 @@ photos.post('/upload', async (c) => {
     const fileBuffer = Buffer.from(await file.arrayBuffer())
 
     // Upload to R2
-    const imageUrl = await uploadToR2(fileBuffer, fileName, file.type)
+    await uploadToR2(fileBuffer, fileName, file.type)
+
+    // Generate presigned URL (valid 7 hari = 604800 detik)
+    const presignedUrl = await getPresignedUrl(fileName, 604800)
 
     // Save to Supabase
     const { data, error } = await supabase
       .from('photos')
       .insert([
         {
-          url: imageUrl,
+          url: presignedUrl,
           caption: caption
         }
       ])
@@ -90,6 +93,52 @@ photos.post('/upload', async (c) => {
   } catch (error) {
     console.error('Upload error:', error)
     return c.json({ error: 'Failed to upload photo' }, 500)
+  }
+})
+
+// Generate fresh presigned URL for existing photo
+photos.post('/:id/refresh-url', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'))
+    
+    // Get photo data
+    const { data: photo, error: fetchError } = await supabase
+      .from('photos')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !photo) {
+      return c.json({ error: 'Photo not found' }, 404)
+    }
+
+    // Extract filename from existing URL (assuming it's stored in the format we expect)
+    const urlParts = photo.url.split('/')
+    const fileName = urlParts[urlParts.length - 1].split('?')[0] // Remove query params if any
+
+    // Generate new presigned URL (valid for 7 days)
+    const newPresignedUrl = await getPresignedUrl(fileName, 604800)
+
+    // Update photo URL in database
+    const { data, error } = await supabase
+      .from('photos')
+      .update({ url: newPresignedUrl })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      return c.json({ error: error.message }, 500)
+    }
+
+    return c.json({ 
+      success: true, 
+      photo: data,
+      message: 'Photo URL refreshed successfully' 
+    })
+  } catch (error) {
+    console.error('Refresh URL error:', error)
+    return c.json({ error: 'Failed to refresh photo URL' }, 500)
   }
 })
 

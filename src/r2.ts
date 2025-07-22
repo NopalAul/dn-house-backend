@@ -20,3 +20,21 @@ export const uploadToR2 = async (file: Buffer, fileName: string, contentType: st
   const result = await r2.upload(uploadParams).promise()
   return result.Location || `${env.R2_ENDPOINT}/${fileName}`
 }
+
+export const getPresignedUrl = async (fileName: string, expiresIn: number = 3600): Promise<string> => {
+  const params = {
+    Bucket: env.R2_BUCKET,
+    Key: fileName,
+    Expires: expiresIn, // URL expires in seconds (default: 1 hour)
+  }
+
+  return new Promise((resolve, reject) => {
+    r2.getSignedUrl('getObject', params, (err, url) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(url)
+      }
+    })
+  })
+}

@@ -7,5 +7,6 @@ export interface Photo {
   id: number
   url: string
   caption: string
+  filename?: string
   created_at: string
 }
