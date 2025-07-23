@@ -24,7 +24,7 @@ app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOStri
 serve({
   fetch: app.fetch,
   port: 5000,
-  hostname: 'localhost',
+  // hostname: 'localhost',
 }, (info) => {
   console.log(`Server is running at http://localhost:${info.port}`)
 })
