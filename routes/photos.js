@@ -77,6 +77,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const file = req.file;
     const { caption = '', type = '' } = req.body;
 
+    // log request body and file info
+    console.log('Request body:', req.body);
+
     if (!file) {
       return res.status(400).json({ error: 'No file provided' });
     }
