@@ -173,6 +173,73 @@ router.post('/:id/refresh-url', async (req, res) => {
   }
 });
 
+// untuk update photo (file image, caption, type) (api/photos/update/:id)
+router.put('/update/:id', upload.single('file'), async (req, res) => {
+  try {
+    const { supabase, r2Client, env } = initializeClients();
+    const id = parseInt(req.params.id);
+    const file = req.file;
+    const { caption = '', type = '' } = req.body;
+
+    if (!file && !caption && !type) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    if (file && !file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ error: 'File must be an image' });
+    }
+
+    if (file && !['postcard', 'polaroid'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid type. Must be "postcard" or "polaroid".' });
+    }
+
+    // Fetch existing photo
+    const { data: existingPhoto, error: fetchError } = await supabase
+      .from('photos')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existingPhoto) {
+      return res.status(404).json({ error: 'Photo not found' });
+    }
+
+    let newUrl = existingPhoto.url;
+
+    // If a new file is provided, upload it to R2
+    if (file) {
+      const fileName = `${Date.now()}-${file.originalname}`;
+      await uploadToR2(r2Client, file.buffer, fileName, file.mimetype, env.R2_BUCKET);
+      newUrl = await getPresignedUrl(r2Client, fileName, env.R2_BUCKET, 604800);
+    }
+
+    // Update in Supabase
+    const { data, error } = await supabase
+      .from('photos')
+      .update({
+        url: newUrl,
+        caption: caption || existingPhoto.caption,
+        type: type || existingPhoto.type
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ 
+      success: true, 
+      photo: data,
+      message: 'Photo updated successfully' 
+    });
+  } catch (error) {
+    console.error('Update photo error:', error);
+    res.status(500).json({ error: 'Failed to update photo' });
+  }
+});
+
 // Delete photo
 router.delete('/:id', async (req, res) => {
   try {
