@@ -7,7 +7,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://your-frontend-domain.vercel.app', 'http://192.168.5.168:3000'],
+  origin: ['http://localhost:3000', 'https://dn-house.vercel.app', 'http://192.168.5.168:3000'],
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PUT'],
   allowedHeaders: ['Content-Type'],
 }));
