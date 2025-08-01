@@ -73,7 +73,7 @@ photos.post('/upload', async (c) => {
     await uploadToR2(fileBuffer, fileName, file.type)
 
     // Generate presigned URL (valid 7 hari = 604800 detik)
-    const presignedUrl = await getPresignedUrl(fileName, 604800)
+    const presignedUrl = await getPresignedUrl(fileName, 31556952)
 
     // Save to Supabase
     const { data, error } = await supabase
