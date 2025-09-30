@@ -22,7 +22,34 @@ const initializeClients = () => {
   return { supabase, env };
 };
 
-// Untuk api/photos
+const uploadToSupabaseStorage = async (supabase, file, fileName, contentType) => {
+  const { data, error } = await supabase.storage
+    .from('dn-house-photo-storage')
+    .upload(fileName, file, {
+      contentType,
+      upsert: false
+    });
+
+  if (error) {
+    throw new Error(`Upload failed: ${error.message}`);
+  }
+
+  // Get public URL
+  const { data: publicUrlData } = supabase.storage
+    .from('dn-house-photo-storage')
+    .getPublicUrl(fileName);
+
+  return publicUrlData.publicUrl;
+};
+
+const getSupabaseStorageUrl = (supabase, fileName) => {
+  const { data } = supabase.storage
+    .from('dn-house-photo-storage')
+    .getPublicUrl(fileName);
+
+  return data.publicUrl;
+};
+
 router.get('/', async (req, res) => {
   try {
     const { supabase } = initializeClients();
