@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
-import { supabase, Photo } from '../services/supabase'
-import { uploadToR2, getPresignedUrl } from '../services/r2'
+import { supabase, Photo, uploadToSupabaseStorage, getSupabaseStorageUrl } from '../services/supabase'
 
 const photos = new Hono()
 
@@ -63,24 +62,19 @@ photos.post('/upload', async (c) => {
     // Validate type value
     if (!['postcard', 'polaroid'].includes(type)) {
       return c.json({ error: 'Invalid type. Must be "postcard" or "polaroid".' }, 400)
-    }
-
-    // Generate unique filename
+    }    // Generate unique filename
     const fileName = `${Date.now()}-${file.name}`
     const fileBuffer = Buffer.from(await file.arrayBuffer())
 
-    // Upload to R2
-    await uploadToR2(fileBuffer, fileName, file.type)
-
-    // Generate presigned URL (valid 1 tahun = 31,556,952 detik)
-    const presignedUrl = await getPresignedUrl(fileName, 31556952)
+    // Upload to Supabase Storage
+    const imageUrl = await uploadToSupabaseStorage(fileBuffer, fileName, file.type)
 
     // Save to Supabase
     const { data, error } = await supabase
       .from('photos')
       .insert([
         {
-          url: presignedUrl,
+          url: imageUrl,
           caption: caption,
           type: type // store type
         }
@@ -117,19 +111,17 @@ photos.post('/:id/refresh-url', async (c) => {
 
     if (fetchError || !photo) {
       return c.json({ error: 'Photo not found' }, 404)
-    }
-
-    // Extract filename from existing URL (assuming it's stored in the format we expect)
+    }    // Extract filename from existing URL (assuming it's stored in the format we expect)
     const urlParts = photo.url.split('/')
     const fileName = urlParts[urlParts.length - 1].split('?')[0] // Remove query params if any
 
-    // Generate new presigned URL (valid for 7 days)
-    const newPresignedUrl = await getPresignedUrl(fileName, 604800)
+    // Generate new Supabase storage URL
+    const newImageUrl = getSupabaseStorageUrl(fileName)
 
     // Update photo URL in database
     const { data, error } = await supabase
       .from('photos')
-      .update({ url: newPresignedUrl })
+      .update({ url: newImageUrl })
       .eq('id', id)
       .select()
       .single()

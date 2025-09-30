@@ -11,3 +11,31 @@ export interface Photo {
   created_at: string
   type: string // "postcard" or "polaroid"
 }
+
+export const uploadToSupabaseStorage = async (file: Buffer, fileName: string, contentType: string): Promise<string> => {
+  const { data, error } = await supabase.storage
+    .from('dn-house-photo-storage')
+    .upload(fileName, file, {
+      contentType,
+      upsert: false
+    })
+
+  if (error) {
+    throw new Error(`Upload failed: ${error.message}`)
+  }
+
+  // Get public URL
+  const { data: publicUrlData } = supabase.storage
+    .from('dn-house-photo-storage')
+    .getPublicUrl(fileName)
+
+  return publicUrlData.publicUrl
+}
+
+export const getSupabaseStorageUrl = (fileName: string): string => {
+  const { data } = supabase.storage
+    .from('dn-house-photo-storage')
+    .getPublicUrl(fileName)
+
+  return data.publicUrl
+}

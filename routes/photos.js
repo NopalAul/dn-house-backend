@@ -1,7 +1,6 @@
 const express = require('express');
 const multer = require('multer');
 const { createClient } = require('@supabase/supabase-js');
-const { createR2Client, uploadToR2, getPresignedUrl } = require('../utils/r2');
 
 const router = express.Router();
 
@@ -15,17 +14,12 @@ const upload = multer({
 const initializeClients = () => {
   const env = {
     SUPABASE_URL: process.env.SUPABASE_URL,
-    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
-    R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
-    R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
-    R2_BUCKET: process.env.R2_BUCKET,
-    R2_ENDPOINT: process.env.R2_ENDPOINT
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY
   };
 
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
-  const r2Client = createR2Client(env);
 
-  return { supabase, r2Client, env };
+  return { supabase, env };
 };
 
 // Untuk api/photos
@@ -73,7 +67,7 @@ router.get('/:id', async (req, res) => {
 // Untuk api/photos/upload
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
-    const { supabase, r2Client, env } = initializeClients();
+    const { supabase } = initializeClients();
     const file = req.file;
     const { caption = '', type = '' } = req.body;
 
@@ -95,17 +89,15 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     // Unique filename
     const fileName = `${Date.now()}-${file.originalname}`;
 
-    await uploadToR2(r2Client, file.buffer, fileName, file.mimetype, env.R2_BUCKET);
-
-    // Presigned URL (valid 7 hari = 604800 seconds)
-    const presignedUrl = await getPresignedUrl(r2Client, fileName, env.R2_BUCKET, 604800);
+    // Upload to Supabase Storage
+    const imageUrl = await uploadToSupabaseStorage(supabase, file.buffer, fileName, file.mimetype);
 
     // Supabase save
     const { data, error } = await supabase
       .from('photos')
       .insert([
         {
-          url: presignedUrl,
+          url: imageUrl,
           caption: caption,
           type: type
         }
@@ -131,7 +123,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 // Generate fresh presigned URL for existing photo
 router.post('/:id/refresh-url', async (req, res) => {
   try {
-    const { supabase, r2Client, env } = initializeClients();
+    const { supabase } = initializeClients();
     const id = parseInt(req.params.id);
     
     const { data: photo, error: fetchError } = await supabase
@@ -147,13 +139,13 @@ router.post('/:id/refresh-url', async (req, res) => {
     const urlParts = photo.url.split('/');
     const fileName = urlParts[urlParts.length - 1].split('?')[0];
 
-    // Generate new presigned URL (valid for 7 hari)
-    const newPresignedUrl = await getPresignedUrl(r2Client, fileName, env.R2_BUCKET, 604800);
+    // Generate new Supabase storage URL
+    const newImageUrl = getSupabaseStorageUrl(supabase, fileName);
 
     // Supabase update photo URL
     const { data, error } = await supabase
       .from('photos')
-      .update({ url: newPresignedUrl })
+      .update({ url: newImageUrl })
       .eq('id', id)
       .select()
       .single();
@@ -176,7 +168,7 @@ router.post('/:id/refresh-url', async (req, res) => {
 // untuk update photo (file image, caption, type) (api/photos/update/:id)
 router.put('/update/:id', upload.single('file'), async (req, res) => {
   try {
-    const { supabase, r2Client, env } = initializeClients();
+    const { supabase } = initializeClients();
     const id = parseInt(req.params.id);
     const file = req.file;
     const { caption = '', type = '' } = req.body;
@@ -189,7 +181,7 @@ router.put('/update/:id', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'File must be an image' });
     }
 
-    if (file && !['postcard', 'polaroid'].includes(type)) {
+    if (type && !['postcard', 'polaroid'].includes(type)) {
       return res.status(400).json({ error: 'Invalid type. Must be "postcard" or "polaroid".' });
     }
 
@@ -206,11 +198,10 @@ router.put('/update/:id', upload.single('file'), async (req, res) => {
 
     let newUrl = existingPhoto.url;
 
-    // If a new file is provided, upload it to R2
+    // If a new file is provided, upload it to Supabase Storage
     if (file) {
       const fileName = `${Date.now()}-${file.originalname}`;
-      await uploadToR2(r2Client, file.buffer, fileName, file.mimetype, env.R2_BUCKET);
-      newUrl = await getPresignedUrl(r2Client, fileName, env.R2_BUCKET, 604800);
+      newUrl = await uploadToSupabaseStorage(supabase, file.buffer, fileName, file.mimetype);
     }
 
     // Update in Supabase
